@@ -7,8 +7,8 @@
 #include <cstring>
 
 
-constexpr uint16_t kRxbufLength = 512;  // NOTE: must be power of 2
-constexpr uint16_t kTxBufLength = 512;  // NOTE: must be power of 2
+constexpr uint16_t kRxbufLength = 8;  // NOTE: must be power of 2
+constexpr uint16_t kTxBufLength = 8;  // NOTE: must be power of 2
 
 namespace hal {
 

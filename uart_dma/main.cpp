@@ -1,6 +1,9 @@
-#include "main.h"
-#include "uart_dma.hpp"
+#include "generated/Inc/main.h"
+#include "./hal/uart_dma.hpp"
 
+extern UART_HandleTypeDef huart3;
+extern DMA_HandleTypeDef hdma_usart3_tx;
+extern DMA_HandleTypeDef hdma_usart3_rx;
 
 hal::UartDma uart_dma(&huart3);
 
@@ -38,7 +41,6 @@ int main(void) {
 }
 
 void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart) {
-  // HAL_UART_AbortTransmit_IT(huart);
   uart_dma.flush();
 }
 
