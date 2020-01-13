@@ -1,3 +1,0 @@
-/home/rossihwang/git/play_ROS_with_nucleo_f429zi/uart_dma/build/CMakeFiles/rebuild_cache.dir
-/home/rossihwang/git/play_ROS_with_nucleo_f429zi/uart_dma/build/CMakeFiles/uart3_dma.elf.dir
-/home/rossihwang/git/play_ROS_with_nucleo_f429zi/uart_dma/build/CMakeFiles/edit_cache.dir
