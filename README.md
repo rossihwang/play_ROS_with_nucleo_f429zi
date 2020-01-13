@@ -1,5 +1,13 @@
 # play_ROS_with_nucleo_f429zi
 
+This project comes from
+
+https://github.com/ros-drivers/rosserial
+
+https://github.com/yoneken/rosserial_stm32
+
+
+
 ## How the MCU code generated
 
 - Using STM32CubeMX and ioc file to generate the MCU code 
