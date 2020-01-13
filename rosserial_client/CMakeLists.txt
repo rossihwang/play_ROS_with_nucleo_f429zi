@@ -15,13 +15,13 @@ include(device.cmake)
 include(toolchain.cmake)
 
 # Startup file
-set(START_FILE ${CMAKE_CURRENT_SOURCE_DIR}/startup/startup_stm32f429xx.s)
+set(START_FILE ${CMAKE_CURRENT_SOURCE_DIR}/generated/startup_stm32f429xx.s)
 
 # User code
-aux_source_directory(${CMAKE_CURRENT_SOURCE_DIR}/src USER_SOURCES)
-target_sources(${MCU_ELF} PRIVATE ${USER_SOURCES} ros/time.cpp ros/duration.cpp)
+aux_source_directory(${CMAKE_CURRENT_SOURCE_DIR}/generated/Src USER_SOURCES)
+target_sources(${MCU_ELF} PRIVATE ${USER_SOURCES} main.cpp ros/time.cpp ros/duration.cpp)
 
-target_include_directories(${MCU_ELF} PRIVATE ./inc ./ros)
+target_include_directories(${MCU_ELF} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/generated/Inc ${CMAKE_CURRENT_SOURCE_DIR}/ros)
 
 # -specs=nosys.specs: syscall library
 target_link_libraries(${MCU_ELF} PUBLIC ${START_FILE} -Wl,--gc-sections -specs=nosys.specs)

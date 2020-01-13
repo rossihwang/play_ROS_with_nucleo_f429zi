@@ -36,7 +36,7 @@
 #define _ROS_H_
 
 #include "ros/node_handle.h"
-#include "../inc/uart_dma.hpp"
+#include "../hal/uart_dma.hpp"
 
 namespace ros
 {

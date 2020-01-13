@@ -1,10 +1,15 @@
 // Copyright <2020> [Copyright rossihwang@gmail.com
 
-#include "main.h"
-#include "uart_dma.hpp"
+#include "./generated/Inc/main.h"
+#include "./hal/uart_dma.hpp"
 
 #include <ros.h>
 #include <std_msgs/String.h>
+
+
+extern UART_HandleTypeDef huart3;
+extern DMA_HandleTypeDef hdma_usart3_tx;
+extern DMA_HandleTypeDef hdma_usart3_rx;
 
 
 hal::UartDma uart_dma(&huart3);

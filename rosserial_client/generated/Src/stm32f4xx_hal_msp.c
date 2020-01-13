@@ -25,6 +25,7 @@
 
 /* USER CODE END Includes */
 extern DMA_HandleTypeDef hdma_usart3_tx;
+
 extern DMA_HandleTypeDef hdma_usart3_rx;
 
 /* Private typedef -----------------------------------------------------------*/
