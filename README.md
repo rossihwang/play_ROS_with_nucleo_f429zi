@@ -30,11 +30,17 @@ https://github.com/yoneken/rosserial_stm32
 - In ROS
 
   ```
-  rosrun rosserial_python serial_node.py _baud:=115200 _port:=/dev/ACM0
+  rosrun rosserial_python serial_node.py _baud:=115200 _port:=/dev/ttyACM0
   ```
 
   ```
   rostopic echo chatter1  // or chatter2
+  ```
+
+- visualize with rviz
+
+  ```
+  apt install ros-melodic-rviz-imu-plugin ros-melodic-rviz
   ```
 
   
