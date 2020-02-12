@@ -7,12 +7,12 @@
 #include <std_msgs/String.h>
 
 
-extern UART_HandleTypeDef huart3;
-extern DMA_HandleTypeDef hdma_usart3_tx;
-extern DMA_HandleTypeDef hdma_usart3_rx;
+// extern UART_HandleTypeDef huart3;
+// extern DMA_HandleTypeDef hdma_usart3_tx;
+// extern DMA_HandleTypeDef hdma_usart3_rx;
 
 
-hal::UartDma uart_dma(&huart3);
+// hal::UartDma uart_dma(&huart3);
 
 ros::NodeHandle nh;
 std_msgs::String str_msg1;
