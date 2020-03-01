@@ -1,6 +1,7 @@
 #include "generated/Inc/main.h"
 #include "./sensor/mpu6050.hpp"
 #include "./hal/uart_dma.hpp"
+#include "./hal/quaternion.hpp"
 #include <ros.h>
 #include <sensor_msgs/Imu.h>
 #include <std_msgs/String.h>
@@ -68,9 +69,11 @@ int main(void) {
 
   while (1) {
     if (imu.IsDataReady()) {
+      now = nh.now();
       std::tie(gx, gy, gz) = imu.ReadGyroData(true);
       std::tie(ax, ay, az) = imu.ReadAccelData(true);
       temp_dc = imu.ReadTempData();
+      Quaternion<float> qua = imu.FuseToQuaternion(ax, ay, az, gx, gy, gz, now.nsec);
       
       imu_msg.angular_velocity.x = gx;
       imu_msg.angular_velocity.y = gy;
@@ -78,7 +81,12 @@ int main(void) {
       imu_msg.linear_acceleration.x = ax;
       imu_msg.linear_acceleration.y = ay;
       imu_msg.linear_acceleration.z = az;
-      now = nh.now();
+      imu_msg.orientation.w = qua.q1;
+      imu_msg.orientation.x = qua.q2;
+      imu_msg.orientation.y = qua.q3;
+      imu_msg.orientation.z = qua.q4;
+
+      
       imu_msg.header.frame_id = "imu_frame";  // need for rviz
       imu_msg.header.stamp.sec = now.sec;  // need for rviz
       imu_msg.header.stamp.nsec = now.nsec;  // need for rviz

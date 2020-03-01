@@ -8,6 +8,7 @@
 
 #include "../hal/i2c.hpp"
 #include "../hal/utility.hpp"
+#include "../hal/quaternion.hpp"
 
 using hal::utility::DelayMs;
 
@@ -89,6 +90,8 @@ constexpr uint8_t kRegFifoCountL = 0x73;
 constexpr uint8_t kRegFifoRW = 0x74;
 constexpr uint8_t kRegWhoAmI = 0x75;  // RO
 
+constexpr float PI = 3.14159265358979323846f;
+
 using namespace std::placeholders;
 
 class Mpu6050 {
@@ -124,6 +127,8 @@ class Mpu6050 {
   uint8_t reg_nbits_;
   std::array<float, 3> gyro_offset_;
   std::array<float, 3> accel_offset_;
+  Quaternion<float> q_est_;
+  uint32_t last_timestamp_;
 
  public:
   Mpu6050(I2C_HandleTypeDef *hi2c, uint8_t dev_addr, uint8_t reg_nbits = 8)
@@ -132,7 +137,9 @@ class Mpu6050 {
         a_scale_(AFullScale::G2),
         reg_nbits_(reg_nbits),
         gyro_offset_(),
-        accel_offset_() {
+        accel_offset_(),
+        q_est_(1, 0, 0, 0),
+        last_timestamp_(0) {
     i2c_if_ = hal::I2cInterface::GetInstance(hi2c);
     SingleByteReadWrp = std::bind(&hal::I2cInterface::SingleByteReadReg,
                                   i2c_if_, address_, _1, reg_nbits_);
@@ -397,8 +404,52 @@ class Mpu6050 {
     return false;
   }
   // https://www.x-io.co.uk/res/doc/madgwick_internal_report.pdf
-  bool FuseToQuaternion() {
-    
+  Quaternion<float> FuseToQuaternion(float ax, float ay, float az, float gx, float gy, float gz, uint32_t timestamp) {
+
+    if (last_timestamp_ == 0) {  // skip update
+      last_timestamp_ = timestamp;
+      return q_est_;  
+    }
+    Quaternion<float> w(0, ax, ay, az);
+    w /= w.Norm();
+
+    float f1 = 2 * q_est_.q2 * q_est_.q4 - 2 * q_est_.q1 * q_est_.q3 - w.q2;
+    float f2 = 2 * q_est_.q1 * q_est_.q2 + 2 * q_est_.q3 * q_est_.q4 - w.q3; 
+    float f3 = 1.0 - 2 * q_est_.q2 * q_est_.q2 - 2 * q_est_.q3 * q_est_.q3 - w.q4;
+    float j_11or24 = 2 * q_est_.q3;
+    float j_12or23 = 2 * q_est_.q4;
+    float j_13or22 = 2 * q_est_.q1;
+    float j_14or21 = 2 * q_est_.q2;
+    float j_32 = 2 * j_14or21;
+    float j_33 = 2 * j_11or24;
+
+    Quaternion<float> dot_prod;  // orientation from vector observations
+    dot_prod.q1 = j_14or21 * f2 - j_11or24 * f1;
+    dot_prod.q2 = j_12or23 * f1 + j_13or22 * f2 - j_32 * f3;
+    dot_prod.q3 = j_12or23 * f2 - j_33* f3 - j_13or22 * f1;
+    dot_prod.q4 = j_14or21 * f1 + j_11or24 * f2;
+
+    dot_prod /= dot_prod.Norm();
+
+    Quaternion<float> half_q_est(q_est_ * 0.5);
+    Quaternion<float> derivative;
+    derivative.q1 = -half_q_est.q2 * gx - half_q_est.q3 * gy - half_q_est.q4 * gz;
+    derivative.q2 = half_q_est.q1 * gx + half_q_est.q3 * gz - half_q_est.q4 * gy;
+    derivative.q3 = half_q_est.q1 * gy - half_q_est.q2 * gz + half_q_est.q4 * gx;
+    derivative.q4 = half_q_est.q1 * gz + half_q_est.q2 * gy - half_q_est.q3 * gx;
+
+    constexpr float GyroMeasError = PI * (60.0f / 180.0f);     // gyroscope measurement error in rads/s (start at 60 deg/s), then reduce after ~10 s to 3
+    constexpr float beta = sqrt(3.0f / 4.0f) * GyroMeasError;  // compute beta
+
+    float delta_t = (timestamp - last_timestamp_) / 1000000000.0f;
+    q_est_.q1 += (derivative.q1 - (beta * dot_prod.q1)) * delta_t;
+    q_est_.q2 += (derivative.q2 - (beta * dot_prod.q2)) * delta_t;
+    q_est_.q3 += (derivative.q3 - (beta * dot_prod.q3)) * delta_t;
+    q_est_.q4 += (derivative.q4 - (beta * dot_prod.q4)) * delta_t;
+
+    q_est_ /= q_est_.Norm();
+
+    return q_est_;
   }
 };
 
