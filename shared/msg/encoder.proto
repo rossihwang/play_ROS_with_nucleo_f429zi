@@ -1,0 +1,6 @@
+syntax = "proto3";
+
+message Encoder {
+    uint32 lwheel = 1;
+    uint32 rwheel = 2;
+}

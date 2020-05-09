@@ -1,0 +1,8 @@
+syntax = "proto3";
+
+import "Vector3.proto";
+
+message Imu {
+    Vector3 angular_velocity = 1;
+    Vector3 linear_acceleration = 2;
+}
