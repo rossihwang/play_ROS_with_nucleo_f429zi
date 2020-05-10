@@ -4,7 +4,7 @@ project(test C CXX ASM) # set PROJECT_NAME
 set(CMAKE_BUILD_TYPE Debug)
 set(CMAKE_VERBOSE_MAKEFILE OFF)
 set(CMAKE_C_STANDARD 99)
-set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD 14)
 
 # Add new target
 set(MCU_ELF ${PROJECT_NAME}.elf)
@@ -28,7 +28,7 @@ set(NANOPB_INCLUDE_DIRS ../Thirdparty/nanopb/include)
 
 # Message
 aux_source_directory(../shared/msg/ MSG_SOURCES)
-set(MSG_INCLUDE_DIRS ../shared)
+set(MSG_INCLUDE_DIRS ../shared ../shared/msg/)
 
 # FreeRTOS
 aux_source_directory(Middlewares/Third_Party/FreeRTOS/Source RTOS_SOURCES)

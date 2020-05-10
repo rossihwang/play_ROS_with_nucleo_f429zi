@@ -10,6 +10,9 @@
 #include <pb_encode.h>
 #include <pb_decode.h>
 
+
+namespace pigeon {
+
 constexpr uint8_t kHeader1 = 0x42;
 constexpr uint8_t kHeader2 = 0x24;
 
@@ -19,13 +22,22 @@ enum class ParseState {
   ID,
 };
 
+template <typename T>
+constexpr T max(T a, T b) {
+  return a < b ? b : a;
+}
+
+const std::array<uint16_t, 4> message_size = {{Encoder_size, Imu_size, Twist_size, Log_size}};
+
+constexpr uint16_t kMaxBufferSize = max(max(Encoder_size, Imu_size), max(Twist_size, Log_size));  // FIXME: How to implement a compile-time for loop?
+
 class Pigeon {
 private:
   std::function<size_t(uint8_t*, size_t)> read_func_;
   std::function<void(const uint8_t*, size_t)> write_func_;
   std::unordered_map<MessageId, std::function<void(const uint8_t*, uint16_t)>> callback_map_;
-  uint8_t read_buffer_[256];
-  uint8_t write_buffer_[256];
+  uint8_t read_buffer_[kMaxBufferSize];
+  uint8_t write_buffer_[kMaxBufferSize];
   
 public:  
  Pigeon() {}
@@ -101,4 +113,33 @@ public:
      }
    // }
  }
+ template<Log_Level L>
+ void log(const std::string &s) {
+   Log message = Log_init_zero;
+   size_t size_clip = Log_size;
+   message.level = L;
+   if (s.size() < size_clip) {
+     memcpy(message.log_message, s.c_str(), s.size());
+   } else {
+     memcpy(message.log_message, s.c_str(), size_clip);
+   }
+   
+   pb_ostream_t ostream = pb_ostream_from_buffer(write_buffer_, sizeof(write_buffer_));
+   bool status = pb_encode(&ostream, Log_fields, &message);
+   size_t length = ostream.bytes_written;
+   
+   if (status) {
+     const uint8_t header[] = {kHeader1, kHeader2, static_cast<uint8_t>(length%255), static_cast<uint8_t>(length/255), static_cast<uint8_t>(MessageId::LOG)};
+     write_func_(header, 5);
+     write_func_(write_buffer_, length);
+   }
+ }
+
+//  auto log_debug = log<Log_Level_DEBUG>;
+//  auto log_info = log<Log_Level_INFO>;
+//  auto log_warn = log<Log_Level_WARN>;
+//  auto log_erro = log<Log_Level_ERROR>;
+
 };
+
+}  // namespace pigeon

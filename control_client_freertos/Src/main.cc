@@ -29,6 +29,7 @@
 #include <pigeon/pigeon.h>
 #include <sensor/mpu6050.hpp>
 
+using pigeon::Pigeon;
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 
@@ -54,7 +55,7 @@ DMA_HandleTypeDef hdma_usart3_tx;
 DMA_HandleTypeDef hdma_usart3_rx;
 I2C_HandleTypeDef hi2c1;
 
-Pigeon pigeon;
+Pigeon pg;
 hal::UartDma uart(&huart3);
 sensor::Mpu6050 imu(&hi2c1, 0x68);  // 0x68: AD0->GND, 0x69: AD0->VCC
 
@@ -62,7 +63,7 @@ sensor::Mpu6050 imu(&hi2c1, 0x68);  // 0x68: AD0->GND, 0x69: AD0->VCC
 osThreadId_t defaultTaskHandle;
 const osThreadAttr_t defaultTask_attributes = {
   .name = "defaultTask",
-  .stack_size = 128 * 4,
+  .stack_size = 256 * 4,
   .priority = (osPriority_t) osPriorityNormal
   
 };
@@ -138,11 +139,11 @@ int main(void)
   MX_I2C1_Init();
   /* USER CODE BEGIN 2 */
   uart.init();
-  pigeon.create_subscriber(MessageId::TWIST, callback_twist);
+  pg.create_subscriber(MessageId::TWIST, callback_twist);
   using std::placeholders::_1;
   using std::placeholders::_2;
-  pigeon.register_read(std::bind(static_cast<size_t (hal::UartDma::*)(uint8_t*, size_t)>(&hal::UartDma::read), &uart, _1, _2));
-  pigeon.register_write(std::bind(static_cast<void (hal::UartDma::*)(const uint8_t*, size_t)>(&hal::UartDma::write), &uart, _1, _2));
+  pg.register_read(std::bind(static_cast<size_t (hal::UartDma::*)(uint8_t*, size_t)>(&hal::UartDma::read), &uart, _1, _2));
+  pg.register_write(std::bind(static_cast<void (hal::UartDma::*)(const uint8_t*, size_t)>(&hal::UartDma::write), &uart, _1, _2));
   /* USER CODE END 2 */
 
   /* Init scheduler */
@@ -204,7 +205,7 @@ void callback_twist(const uint8_t *data, uint16_t length) {
 
     }
     taskENTER_CRITICAL();
-    pigeon.publish<Twist>(MessageId::TWIST, message);
+    pg.publish<Twist>(MessageId::TWIST, message);
     taskEXIT_CRITICAL();
   }
   return;
@@ -397,6 +398,9 @@ void StartDefaultTask(void *argument)
   for(;;)
   {
     HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_14);  // For debug
+    taskENTER_CRITICAL();
+    pg.log<Log_Level_DEBUG>("led toggle");
+    taskEXIT_CRITICAL();
     osDelay(500);
   }
   /* USER CODE END 5 */ 
@@ -440,7 +444,7 @@ void ImuReadTaskHandle(void *argument)
     message.has_linear_acceleration = true;
 
     taskENTER_CRITICAL();
-    pigeon.publish<Imu>(MessageId::IMU, message);
+    pg.publish<Imu>(MessageId::IMU, message);
     taskEXIT_CRITICAL();
 
     osDelay(1000);  // 1s
@@ -451,7 +455,7 @@ void ImuReadTaskHandle(void *argument)
 void UartRxTaskHandle(void *argument) {
 
   for (;;) {
-    pigeon.poll();
+    pg.poll();
     osDelay(10);
   }
 }

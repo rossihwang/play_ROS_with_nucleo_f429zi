@@ -14,7 +14,11 @@ target_sources(NANOPB PRIVATE ../Thirdparty/nanopb/src/pb_common.c
                               ../Thirdparty/nanopb/src/pb_encode.c)
 target_include_directories(NANOPB PUBLIC ../Thirdparty/nanopb/include)
 
-set(MSG_SOURCE ../shared/msg/imu.pb.c ../shared/msg/encoder.pb.c ../shared/msg/twist.pb.c ../shared/msg/Vector3.pb.c)
+set(MSG_SOURCE ../shared/msg/imu.pb.c 
+               ../shared/msg/encoder.pb.c 
+               ../shared/msg/twist.pb.c 
+               ../shared/msg/Vector3.pb.c
+               ../shared/msg/logging.pb.c)
 set(MSG_INCLUDE_DIRS ../shared/)
 
 add_executable(msg_server main.cc ${MSG_SOURCE})
