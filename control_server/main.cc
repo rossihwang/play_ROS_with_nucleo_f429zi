@@ -1,3 +1,4 @@
+// Copyright <2020> [Copyright rossihwang@gmail.com]
 #include <string>
 #include <iostream>
 #include <cstdio>
@@ -6,7 +7,6 @@
 #include <serial/serial.h>
 #include <pigeon/pigeon.h>
 #include <msg/msg_def.h>
-#include <msg/imu.pb.h>
 
 
 using std::string;

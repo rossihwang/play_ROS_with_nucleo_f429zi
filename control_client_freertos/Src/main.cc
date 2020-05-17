@@ -22,12 +22,12 @@
 #include "main.h"
 #include "cmsis_os.h"
 #include "../hal/uart_dma.hpp"
+#include "../hal/pwm.hpp"
 #include <msg/msg_def.h>
-#include <msg/encoder.pb.h>
-#include <msg/imu.pb.h>
-#include <msg/twist.pb.h>
 #include <pigeon/pigeon.h>
 #include <sensor/mpu6050.hpp>
+
+#include <mx_export.h>
 
 using pigeon::Pigeon;
 /* Private includes ----------------------------------------------------------*/
@@ -60,8 +60,9 @@ TIM_HandleTypeDef htim3;
 TIM_HandleTypeDef htim8;
 
 Pigeon pg;
-hal::UartDma uart(&huart3);
+hal::UartDmaInterface uart(&huart3);
 sensor::Mpu6050 imu(&hi2c1, 0x68);  // 0x68: AD0->GND, 0x69: AD0->VCC
+hal::PwmInterface pwm(&htim8);
 
 /* Definitions for defaultTask */
 osThreadId_t defaultTaskHandle;
@@ -82,7 +83,7 @@ const osThreadAttr_t imuReadTask_attributes = {
 osThreadId_t uartRxTaskHandle;
 const osThreadAttr_t uartRxTask_attributes = {
   .name = "uartRxTask",
-  .stack_size = 1024 * 4,
+  .stack_size = 512 * 4,
   .priority = (osPriority_t) osPriorityNormal
 };
 
@@ -92,14 +93,13 @@ const osThreadAttr_t uartRxTask_attributes = {
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
-static void MX_GPIO_Init(void);
-static void MX_DMA_Init(void);
-static void MX_USART3_UART_Init(void);
-static void MX_I2C1_Init(void);
 void StartDefaultTask(void *argument);
 void ImuReadTaskHandle(void *argument);
 void UartRxTaskHandle(void *argument);
+
 void callback_twist(const uint8_t *data, uint16_t length);
+void callback_pwm_ctrl(const uint8_t *data, uint16_t length);
+
 
 /* USER CODE BEGIN PFP */
 
@@ -141,13 +141,19 @@ int main(void)
   MX_DMA_Init();
   MX_USART3_UART_Init();
   MX_I2C1_Init();
+
+  MX_TIM8_Init();
   /* USER CODE BEGIN 2 */
   uart.init();
+  pwm.Init(500);
+  pwm.SetChannelDuty(1, 0.3);
+  pwm.SetChannelDuty(2, 0.7);
   pg.create_subscriber(MessageId::TWIST, callback_twist);
+  pg.create_subscriber(MessageId::PWM_CTRL, callback_pwm_ctrl);
   using std::placeholders::_1;
   using std::placeholders::_2;
-  pg.register_read(std::bind(static_cast<size_t (hal::UartDma::*)(uint8_t*, size_t)>(&hal::UartDma::read), &uart, _1, _2));
-  pg.register_write(std::bind(static_cast<void (hal::UartDma::*)(const uint8_t*, size_t)>(&hal::UartDma::write), &uart, _1, _2));
+  pg.register_read(std::bind(static_cast<size_t (hal::UartDmaInterface::*)(uint8_t*, size_t)>(&hal::UartDmaInterface::read), &uart, _1, _2));
+  pg.register_write(std::bind(static_cast<void (hal::UartDmaInterface::*)(const uint8_t*, size_t)>(&hal::UartDmaInterface::write), &uart, _1, _2));
   /* USER CODE END 2 */
 
   /* Init scheduler */
@@ -171,12 +177,13 @@ int main(void)
 
   /* Create the thread(s) */
   /* creation of defaultTask */
+  
   defaultTaskHandle = osThreadNew(StartDefaultTask, NULL, &defaultTask_attributes);
 
-  imuReadTaskHandle = osThreadNew(ImuReadTaskHandle, NULL, &imuReadTask_attributes);
-
+  // imuReadTaskHandle = osThreadNew(ImuReadTaskHandle, NULL, &imuReadTask_attributes);
 
   uartRxTaskHandle = osThreadNew(UartRxTaskHandle, NULL, &uartRxTask_attributes);
+
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
   /* USER CODE END RTOS_THREADS */
@@ -215,6 +222,19 @@ void callback_twist(const uint8_t *data, uint16_t length) {
   return;
 }
 
+void callback_pwm_ctrl(const uint8_t *data, uint16_t length) {
+  PwmCtrl message = PwmCtrl_init_zero;
+  bool status;
+  pb_istream_t stream = pb_istream_from_buffer(data, length);
+  status = pb_decode(&stream, PwmCtrl_fields, &message);
+  if (status) {
+    taskENTER_CRITICAL();
+    pwm.SetChannelDuty(message.channel, message.duty);
+    taskEXIT_CRITICAL();
+  }
+  return;
+}
+
 void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart) {
   uart.flush();
 }
@@ -229,20 +249,30 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
   */
 void SystemClock_Config(void)
 {
-  RCC_OscInitTypeDef RCC_OscInitStruct = {0};
+ RCC_OscInitTypeDef RCC_OscInitStruct = {0};
   RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
 
   /** Configure the main internal regulator output voltage 
   */
   __HAL_RCC_PWR_CLK_ENABLE();
-  __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE3);
+  __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE1);
   /** Initializes the CPU, AHB and APB busses clocks 
   */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
-  RCC_OscInitStruct.HSIState = RCC_HSI_ON;
-  RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
-  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_NONE;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
+  RCC_OscInitStruct.HSEState = RCC_HSE_ON;
+  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
+  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
+  RCC_OscInitStruct.PLL.PLLM = 4;
+  RCC_OscInitStruct.PLL.PLLN = 180;
+  RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
+  RCC_OscInitStruct.PLL.PLLQ = 4;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /** Activate the Over-Drive mode 
+  */
+  if (HAL_PWREx_EnableOverDrive() != HAL_OK)
   {
     Error_Handler();
   }
@@ -250,155 +280,19 @@ void SystemClock_Config(void)
   */
   RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
                               |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
-  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_HSI;
+  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
-  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
-  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
+  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV4;
+  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV2;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_0) != HAL_OK)
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_5) != HAL_OK)
   {
     Error_Handler();
   }
 }
 
-/**
-  * @brief I2C1 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_I2C1_Init(void)
-{
-
-  /* USER CODE BEGIN I2C1_Init 0 */
-
-  /* USER CODE END I2C1_Init 0 */
-
-  /* USER CODE BEGIN I2C1_Init 1 */
-
-  /* USER CODE END I2C1_Init 1 */
-  hi2c1.Instance = I2C1;
-  hi2c1.Init.ClockSpeed = 100000;
-  hi2c1.Init.DutyCycle = I2C_DUTYCYCLE_2;
-  hi2c1.Init.OwnAddress1 = 0;
-  hi2c1.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
-  hi2c1.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
-  hi2c1.Init.OwnAddress2 = 0;
-  hi2c1.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
-  hi2c1.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
-  if (HAL_I2C_Init(&hi2c1) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /** Configure Analogue filter 
-  */
-  if (HAL_I2CEx_ConfigAnalogFilter(&hi2c1, I2C_ANALOGFILTER_ENABLE) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /** Configure Digital filter 
-  */
-  if (HAL_I2CEx_ConfigDigitalFilter(&hi2c1, 0) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN I2C1_Init 2 */
-
-  /* USER CODE END I2C1_Init 2 */
-
-}
-
-/**
-  * @brief USART3 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_USART3_UART_Init(void)
-{
-
-  /* USER CODE BEGIN USART3_Init 0 */
-
-  /* USER CODE END USART3_Init 0 */
-
-  /* USER CODE BEGIN USART3_Init 1 */
-
-  /* USER CODE END USART3_Init 1 */
-  huart3.Instance = USART3;
-  huart3.Init.BaudRate = 115200;
-  huart3.Init.WordLength = UART_WORDLENGTH_8B;
-  huart3.Init.StopBits = UART_STOPBITS_1;
-  huart3.Init.Parity = UART_PARITY_NONE;
-  huart3.Init.Mode = UART_MODE_TX_RX;
-  huart3.Init.HwFlowCtl = UART_HWCONTROL_NONE;
-  huart3.Init.OverSampling = UART_OVERSAMPLING_16;
-  if (HAL_UART_Init(&huart3) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN USART3_Init 2 */
-
-  /* USER CODE END USART3_Init 2 */
-
-}
-
-/** 
-  * Enable DMA controller clock
-  */
-static void MX_DMA_Init(void) 
-{
-
-  /* DMA controller clock enable */
-  __HAL_RCC_DMA1_CLK_ENABLE();
-
-  /* DMA interrupt init */
-  /* DMA1_Stream1_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Stream1_IRQn, 5, 0);
-  HAL_NVIC_EnableIRQ(DMA1_Stream1_IRQn);
-  /* DMA1_Stream3_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Stream3_IRQn, 5, 0);
-  HAL_NVIC_EnableIRQ(DMA1_Stream3_IRQn);
-
-}
-
-/**
-  * @brief GPIO Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_GPIO_Init(void)
-{
-  GPIO_InitTypeDef GPIO_InitStruct = {0};
-
-  /* GPIO Ports Clock Enable */
-  __HAL_RCC_GPIOB_CLK_ENABLE();
-  __HAL_RCC_GPIOD_CLK_ENABLE();
-
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_14, GPIO_PIN_RESET);
-
-  /*Configure GPIO pin : PB14 */
-  GPIO_InitStruct.Pin = GPIO_PIN_14;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
-  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
-
-}
-
-/* USER CODE BEGIN 4 */
-
-/* USER CODE END 4 */
-
-/* USER CODE BEGIN Header_StartDefaultTask */
-/**
-  * @brief  Function implementing the defaultTask thread.
-  * @param  argument: Not used 
-  * @retval None
-  */
-/* USER CODE END Header_StartDefaultTask */
 void StartDefaultTask(void *argument)
 {
-  /* USER CODE BEGIN 5 */
-  /* Infinite loop */
   for(;;)
   {
     HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_14);  // For debug
@@ -407,20 +301,10 @@ void StartDefaultTask(void *argument)
     taskEXIT_CRITICAL();
     osDelay(500);
   }
-  /* USER CODE END 5 */ 
 }
 
-/* USER CODE BEGIN Header_DebugLedTask */
-/**
-* @brief Function implementing the debugLedTask thread.
-* @param argument: Not used
-* @retval None
-*/
-/* USER CODE END Header_DebugLedTask */
-void ImuReadTaskHandle(void *argument)
-{
-  /* USER CODE BEGIN DebugLedTask */
-  /* Infinite loop */
+void ImuReadTaskHandle(void *argument) {
+
   imu.ComputeCalibrateParams();
   imu.Reset();
 
@@ -453,7 +337,6 @@ void ImuReadTaskHandle(void *argument)
 
     osDelay(1000);  // 1s
   }
-  /* USER CODE END DebugLedTask */
 }
 
 void UartRxTaskHandle(void *argument) {

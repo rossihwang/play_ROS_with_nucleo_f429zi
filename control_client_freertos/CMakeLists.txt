@@ -30,6 +30,8 @@ set(NANOPB_INCLUDE_DIRS ../Thirdparty/nanopb/include)
 aux_source_directory(../shared/msg/ MSG_SOURCES)
 set(MSG_INCLUDE_DIRS ../shared ../shared/msg/)
 
+message(ERROR ${MSG_SOURCES})
+
 # FreeRTOS
 aux_source_directory(Middlewares/Third_Party/FreeRTOS/Source RTOS_SOURCES)
 list(APPEND RTOS_SOURCES Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2/cmsis_os2.c
@@ -42,7 +44,8 @@ set(RTOS_INCLUDE_DIRS Middlewares/Third_Party/FreeRTOS/Source/include
 
 # User code
 aux_source_directory(${CMAKE_CURRENT_SOURCE_DIR}/Src  USER_SOURCES)
-list(REMOVE_ITEM USER_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/Src/main.c)
+list(REMOVE_ITEM USER_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/Src/main.c
+                              ${CMAKE_CURRENT_SOURCE_DIR}/Src/freertos.c)
 set(USER_INCLUDE_DIRS .)
 
 add_executable(${MCU_ELF} ${DRIVER_SOURCES} 

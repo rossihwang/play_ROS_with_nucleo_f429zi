@@ -11,10 +11,10 @@ namespace hal {
 class I2cInterface {
   static std::vector<I2cInterface *> i2c_instance_list;
 
- protected:
+ private:
   I2C_HandleTypeDef *hi2c_;
   I2cInterface *instance;
-  I2cInterface(I2C_HandleTypeDef *hi2c) : hi2c_(hi2c) {}
+  explicit I2cInterface(I2C_HandleTypeDef *hi2c) : hi2c_(hi2c) {}
 
  public:
   static I2cInterface *GetInstance(I2C_HandleTypeDef *hi2c) {

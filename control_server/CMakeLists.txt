@@ -18,9 +18,14 @@ set(MSG_SOURCE ../shared/msg/imu.pb.c
                ../shared/msg/encoder.pb.c 
                ../shared/msg/twist.pb.c 
                ../shared/msg/Vector3.pb.c
-               ../shared/msg/logging.pb.c)
+               ../shared/msg/logging.pb.c
+               ../shared/msg/pwm_ctrl.pb.c)
 set(MSG_INCLUDE_DIRS ../shared/)
 
 add_executable(msg_server main.cc ${MSG_SOURCE})
 target_include_directories(msg_server PRIVATE . ${MSG_INCLUDE_DIRS})
 target_link_libraries(msg_server SERIAL NANOPB pthread)
+
+add_executable(pwm_ctrl pwm_ctrl.cc ${MSG_SOURCE})
+target_include_directories(pwm_ctrl PRIVATE . ${MSG_INCLUDE_DIRS})
+target_link_libraries(pwm_ctrl SERIAL NANOPB pthread)

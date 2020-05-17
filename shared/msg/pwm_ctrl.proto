@@ -1,0 +1,7 @@
+
+syntax = "proto3";
+
+message PwmCtrl {
+    int32 channel = 1;
+    float duty = 2; 
+}

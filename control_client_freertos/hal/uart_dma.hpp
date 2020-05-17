@@ -6,13 +6,12 @@
 #include "stm32f4xx_hal_uart.h"
 #include <cstring>
 
-extern UART_HandleTypeDef huart3;
 constexpr uint16_t kRxbufLength = 512;  // NOTE: must be power of 2
 constexpr uint16_t kTxBufLength = 512;  // NOTE: must be power of 2
 
 namespace hal {
 
-class UartDma {
+class UartDmaInterface {
  protected:
   UART_HandleTypeDef *huart_;
 
@@ -30,7 +29,7 @@ class UartDma {
   bool flush_mtx_;
 
  public:
-  explicit UartDma(UART_HandleTypeDef *huart = &huart3)
+  explicit UartDmaInterface(UART_HandleTypeDef *huart)
     : huart_(huart),
       rx_index_(0),
       tx_write_index_(0),
