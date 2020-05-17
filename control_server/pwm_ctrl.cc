@@ -37,13 +37,15 @@ int main(int argc, char **argv) {
     std::cout << " Yes." << std::endl;
   } else {
     std::cout << " No." << std::endl;
+    return 1;
   }
 
   PwmCtrl message = PwmCtrl_init_zero;
-  message.channel = atoi(argv[3]);
-  message.duty = atof(argv[4]);
+  message.channel = static_cast<int32_t>(atoi(argv[3]));
+  message.duty = static_cast<float>(atof(argv[4]));
+  std::cout << "PwmCtrl -> channel: " << static_cast<int>(message.channel) << ", duty: " << message.duty << std::endl;
   pg.publish(MessageId::PWM_CTRL, message);
-
+  my_serial.flush();
 
   return 0;
 
