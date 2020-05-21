@@ -25,10 +25,10 @@
 | PB14 | on-board LED(red) |              |
 | PB8  | I2C1_SCL          | IMU          |
 | PB9  | I2C1_SDA          |              |
-| PA0  | TIM2_CH1          | Hall Sensor1 |
-| PA1  | TIM2_CH2          | Hall Sensor1 |
-| PA6  | TIM3_CH1          | Hall Sensor2 |
-| PA7  | TIM3_CH2          | Hall Sensor2 |
+| PA6  | TIM3_CH1          | Hall Sensor1 |
+| PA7  | TIM3_CH2          | Hall Sensor1 |
+| PD12 | TIM4_CH1          | Hall Sensor2 |
+| PD13 | TIM4_CH2          | Hall Sensor2 |
 | PC6  | TIM8_CH1          | Motor1       |
 | PC7  | TIM8_CH2          | Motor1       |
 | PC8  | TIM8_CH3          | Motor2       |

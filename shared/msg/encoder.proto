@@ -1,6 +1,12 @@
 syntax = "proto3";
 
 message Encoder {
-    uint32 lwheel = 1;
-    uint32 rwheel = 2;
+    enum Direction {
+        FORWARD = 0;
+        BACKWARD = 1;
+    }
+    uint32 lcounter = 1;
+    Direction ldir = 2;
+    uint32 rcounter = 3;
+    Direction rdir = 4;
 }

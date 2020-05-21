@@ -13,25 +13,43 @@
 extern "C" {
 #endif
 
+/* Enum definitions */
+typedef enum _Encoder_Direction {
+    Encoder_Direction_FORWARD = 0,
+    Encoder_Direction_BACKWARD = 1
+} Encoder_Direction;
+
 /* Struct definitions */
 typedef struct _Encoder {
-    uint32_t lwheel;
-    uint32_t rwheel;
+    uint32_t lcounter;
+    Encoder_Direction ldir;
+    uint32_t rcounter;
+    Encoder_Direction rdir;
 } Encoder;
 
 
+/* Helper constants for enums */
+#define _Encoder_Direction_MIN Encoder_Direction_FORWARD
+#define _Encoder_Direction_MAX Encoder_Direction_BACKWARD
+#define _Encoder_Direction_ARRAYSIZE ((Encoder_Direction)(Encoder_Direction_BACKWARD+1))
+
+
 /* Initializer values for message structs */
-#define Encoder_init_default                     {0, 0}
-#define Encoder_init_zero                        {0, 0}
+#define Encoder_init_default                     {0, _Encoder_Direction_MIN, 0, _Encoder_Direction_MIN}
+#define Encoder_init_zero                        {0, _Encoder_Direction_MIN, 0, _Encoder_Direction_MIN}
 
 /* Field tags (for use in manual encoding/decoding) */
-#define Encoder_lwheel_tag                       1
-#define Encoder_rwheel_tag                       2
+#define Encoder_lcounter_tag                     1
+#define Encoder_ldir_tag                         2
+#define Encoder_rcounter_tag                     3
+#define Encoder_rdir_tag                         4
 
 /* Struct field encoding specification for nanopb */
 #define Encoder_FIELDLIST(X, a) \
-X(a, STATIC,   SINGULAR, UINT32,   lwheel,            1) \
-X(a, STATIC,   SINGULAR, UINT32,   rwheel,            2)
+X(a, STATIC,   SINGULAR, UINT32,   lcounter,          1) \
+X(a, STATIC,   SINGULAR, UENUM,    ldir,              2) \
+X(a, STATIC,   SINGULAR, UINT32,   rcounter,          3) \
+X(a, STATIC,   SINGULAR, UENUM,    rdir,              4)
 #define Encoder_CALLBACK NULL
 #define Encoder_DEFAULT NULL
 
@@ -41,7 +59,7 @@ extern const pb_msgdesc_t Encoder_msg;
 #define Encoder_fields &Encoder_msg
 
 /* Maximum encoded size of messages (where known) */
-#define Encoder_size                             12
+#define Encoder_size                             16
 
 #ifdef __cplusplus
 } /* extern "C" */

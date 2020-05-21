@@ -21,8 +21,9 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "cmsis_os.h"
-#include "../hal/uart_dma.hpp"
-#include "../hal/pwm.hpp"
+#include <hal/uart_dma.hpp>
+#include <hal/pwm.hpp>
+#include <hal/encoder.hpp>
 #include <msg/msg_def.h>
 #include <pigeon/pigeon.h>
 #include <sensor/mpu6050.hpp>
@@ -50,19 +51,21 @@ using pigeon::Pigeon;
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
-UART_HandleTypeDef huart3;
-DMA_HandleTypeDef hdma_usart3_tx;
-DMA_HandleTypeDef hdma_usart3_rx;
-I2C_HandleTypeDef hi2c1;
+extern UART_HandleTypeDef huart3;
+extern DMA_HandleTypeDef hdma_usart3_tx;
+extern DMA_HandleTypeDef hdma_usart3_rx;
+extern I2C_HandleTypeDef hi2c1;
 
-TIM_HandleTypeDef htim2;
-TIM_HandleTypeDef htim3;
-TIM_HandleTypeDef htim8;
+extern TIM_HandleTypeDef htim3;
+extern TIM_HandleTypeDef htim4;
+extern TIM_HandleTypeDef htim8;
 
 Pigeon pg;
 hal::UartDmaInterface uart(&huart3);
 sensor::Mpu6050 imu(&hi2c1, 0x68);  // 0x68: AD0->GND, 0x69: AD0->VCC
 hal::PwmInterface pwm(&htim8);
+hal::Encoder encoder1(&htim3);
+hal::Encoder encoder2(&htim4);
 
 /* Definitions for defaultTask */
 osThreadId_t defaultTaskHandle;
@@ -87,6 +90,13 @@ const osThreadAttr_t uartRxTask_attributes = {
   .priority = (osPriority_t) osPriorityNormal
 };
 
+osThreadId_t encoderTaskHandle;
+const osThreadAttr_t encoderTask_attributes = {
+  .name = "encoderTask",
+  .stack_size = 256 * 4,
+  .priority = (osPriority_t) osPriorityNormal
+};
+
 /* USER CODE BEGIN PV */
 
 /* USER CODE END PV */
@@ -96,6 +106,7 @@ void SystemClock_Config(void);
 void StartDefaultTask(void *argument);
 void ImuReadTaskHandle(void *argument);
 void UartRxTaskHandle(void *argument);
+void EncoderTaskHandle(void *argument);
 
 void callback_twist(const uint8_t *data, uint16_t length);
 void callback_pwm_ctrl(const uint8_t *data, uint16_t length);
@@ -143,11 +154,18 @@ int main(void)
   MX_I2C1_Init();
 
   MX_TIM8_Init();
+  MX_TIM3_Init();
+  MX_TIM4_Init();
   /* USER CODE BEGIN 2 */
   uart.init();
   pwm.Init(500);
-  pwm.SetChannelDuty(1, 0.3);
-  pwm.SetChannelDuty(2, 0.7);
+  pwm.SetChannelDuty(1, 0.0);
+  pwm.SetChannelDuty(2, 0.0);
+  pwm.SetChannelDuty(3, 0.0);
+  pwm.SetChannelDuty(4, 0.0);
+
+
+
   pg.create_subscriber(MessageId::TWIST, callback_twist);
   pg.create_subscriber(MessageId::PWM_CTRL, callback_pwm_ctrl);
   using std::placeholders::_1;
@@ -184,6 +202,7 @@ int main(void)
 
   uartRxTaskHandle = osThreadNew(UartRxTaskHandle, NULL, &uartRxTask_attributes);
 
+  encoderTaskHandle = osThreadNew(EncoderTaskHandle, NULL, &encoderTask_attributes);
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
   /* USER CODE END RTOS_THREADS */
@@ -228,10 +247,9 @@ void callback_pwm_ctrl(const uint8_t *data, uint16_t length) {
   pb_istream_t stream = pb_istream_from_buffer(data, length);
   status = pb_decode(&stream, PwmCtrl_fields, &message);
   if (status) {
-    taskENTER_CRITICAL();
     pwm.SetChannelDuty(message.channel, message.duty);
-    taskEXIT_CRITICAL();
   }
+  
   return;
 }
 
@@ -347,6 +365,27 @@ void UartRxTaskHandle(void *argument) {
   }
 }
 
+void EncoderTaskHandle(void *argument) {
+  Encoder message = Encoder_init_zero;
+  
+  hal::Encoder::Direction direct;
+  uint16_t count;
+  
+  encoder1.Start();
+
+  for (;;) {
+    message = Encoder_init_zero;
+    std::tie(direct, count) = encoder1.Read();
+    message.rdir = (direct == hal::Encoder::Direction::kForward ? Encoder_Direction_FORWARD : Encoder_Direction_BACKWARD);
+    message.rcounter = count;
+
+    taskENTER_CRITICAL();
+    pg.publish<Encoder>(MessageId::ENCODER, message);
+    taskEXIT_CRITICAL();
+    osDelay(10);  // 10ms
+  }
+}
+
  /**
   * @brief  Period elapsed callback in non blocking mode
   * @note   This function is called  when TIM14 interrupt took place, inside
@@ -376,7 +415,10 @@ void Error_Handler(void)
 {
   /* USER CODE BEGIN Error_Handler_Debug */
   /* User can add his own implementation to report the HAL error return state */
-
+  while (1) {
+    HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_14);  // For debug
+    osDelay(100);
+  }
   /* USER CODE END Error_Handler_Debug */
 }
 

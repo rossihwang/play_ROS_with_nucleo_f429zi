@@ -64,6 +64,19 @@ void callback_log(const uint8_t *data, uint16_t length) {
   }
 }
 
+void callback_encoder(const uint8_t *data, uint16_t length) {
+  Encoder message = Encoder_init_zero;
+
+  bool status;
+  pb_istream_t stream = pb_istream_from_buffer(data, length);
+  status = pb_decode(&stream, Encoder_fields, &message);
+  if (status) {
+    std::cout << "direction: " << message.rdir << ", counter: " << message.rcounter << std::endl;
+  } else {
+    std::cout << "Encoder Decode failed" << std::endl;
+  }
+}
+
 void thread1() {
   while (1) {
     pg.poll();
@@ -102,6 +115,8 @@ int main(int argc, char **argv) {
   std::cout << "subscribe to twist" << std::endl;
   pg.create_subscriber(MessageId::LOG, callback_log);
   std::cout << "subscribe to log" << std::endl;
+  pg.create_subscriber(MessageId::ENCODER, callback_encoder);
+  std::cout << "subscribe to encoder" << std::endl;
   using std::placeholders::_1;
   using std::placeholders::_2;
   pg.register_read(std::bind(static_cast<size_t (serial::Serial::*)(uint8_t*, size_t)>(&serial::Serial::read), &my_serial, _1, _2));
