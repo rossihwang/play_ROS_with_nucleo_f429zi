@@ -15,8 +15,8 @@ extern "C" {
 
 /* Enum definitions */
 typedef enum _Encoder_Direction {
-    Encoder_Direction_FORWARD = 0,
-    Encoder_Direction_BACKWARD = 1
+    Encoder_Direction_CLOCKWISE = 0,
+    Encoder_Direction_ANTI_CLOCKWISE = 1
 } Encoder_Direction;
 
 /* Struct definitions */
@@ -29,9 +29,9 @@ typedef struct _Encoder {
 
 
 /* Helper constants for enums */
-#define _Encoder_Direction_MIN Encoder_Direction_FORWARD
-#define _Encoder_Direction_MAX Encoder_Direction_BACKWARD
-#define _Encoder_Direction_ARRAYSIZE ((Encoder_Direction)(Encoder_Direction_BACKWARD+1))
+#define _Encoder_Direction_MIN Encoder_Direction_CLOCKWISE
+#define _Encoder_Direction_MAX Encoder_Direction_ANTI_CLOCKWISE
+#define _Encoder_Direction_ARRAYSIZE ((Encoder_Direction)(Encoder_Direction_ANTI_CLOCKWISE+1))
 
 
 /* Initializer values for message structs */
