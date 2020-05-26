@@ -368,21 +368,25 @@ void UartRxTaskHandle(void *argument) {
 void EncoderTaskHandle(void *argument) {
   Encoder message = Encoder_init_zero;
   
-  hal::Encoder::Direction direct;
-  uint16_t count;
+  hal::Encoder::Direction rdirect, ldirect;
+  uint16_t rcount, lcount;
   
   encoder1.Start();
+  encoder2.Start();
 
   for (;;) {
     message = Encoder_init_zero;
-    std::tie(direct, count) = encoder1.Read();
-    message.rdir = (direct == hal::Encoder::Direction::kForward ? Encoder_Direction_FORWARD : Encoder_Direction_BACKWARD);
-    message.rcounter = count;
+    std::tie(rdirect, rcount) = encoder1.ReadDiff();
+    std::tie(ldirect, lcount) = encoder2.ReadDiff();
+    message.rdir = (rdirect == hal::Encoder::Direction::kAntiClockwise ? Encoder_Direction_ANTI_CLOCKWISE : Encoder_Direction_CLOCKWISE);
+    message.rcounter = rcount;
+    message.ldir = (ldirect == hal::Encoder::Direction::kAntiClockwise ? Encoder_Direction_ANTI_CLOCKWISE : Encoder_Direction_CLOCKWISE);
+    message.lcounter = lcount;
 
     taskENTER_CRITICAL();
     pg.publish<Encoder>(MessageId::ENCODER, message);
     taskEXIT_CRITICAL();
-    osDelay(10);  // 10ms
+    osDelay(100);  // 10ms
   }
 }
 

@@ -14,8 +14,8 @@ class Encoder {
 
  public:
   enum class Direction {
-    kForward,
-    kBackward
+    kClockwise = 0,
+    kAntiClockwise = 1,
   };
   Encoder(TIM_HandleTypeDef *htim)
     : htim_(htim),
@@ -40,13 +40,27 @@ class Encoder {
 
     count = __HAL_TIM_GET_COUNTER(htim_);
     if (__HAL_TIM_IS_TIM_COUNTING_DOWN(htim_)) {
-      dir = Direction::kBackward;
+      dir = Direction::kAntiClockwise;
     } else {
-      dir = Direction::kForward;
+      dir = Direction::kClockwise;
     }
     last_count_ = count;
     return std::make_tuple(dir, count);
-    
+  }
+  std::tuple<Direction, uint16_t> ReadDiff() {
+    Direction dir;
+    uint16_t count, diff;
+
+    count = __HAL_TIM_GET_COUNTER(htim_);
+    if (__HAL_TIM_IS_TIM_COUNTING_DOWN(htim_)) {
+      dir = Direction::kAntiClockwise;
+      diff = last_count_ - count;
+    } else {
+      dir = Direction::kClockwise;
+      diff = count - last_count_;
+    }
+    last_count_ = count;
+    return std::make_tuple(dir, diff);
   }
 };
 
