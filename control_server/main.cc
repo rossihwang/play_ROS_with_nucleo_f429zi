@@ -71,7 +71,8 @@ void callback_encoder(const uint8_t *data, uint16_t length) {
   pb_istream_t stream = pb_istream_from_buffer(data, length);
   status = pb_decode(&stream, Encoder_fields, &message);
   if (status) {
-    std::cout << "direction: " << message.rdir << ", counter: " << message.rcounter << std::endl;
+    std::cout << "rdir: " << (message.rdir == 1 ? "anti-clockwise" : "clockwise") << ", rcounter: " << message.rcounter << std::endl;
+    std::cout << "ldir: " << (message.ldir == 1 ? "anti-clockwise" : "clockwise") << ", lcounter: " << message.lcounter << std::endl;
   } else {
     std::cout << "Encoder Decode failed" << std::endl;
   }
