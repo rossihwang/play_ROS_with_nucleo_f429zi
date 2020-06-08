@@ -12,7 +12,7 @@
 
 using hal::utility::DelayMs;
 
-namespace sensor {
+namespace module {
 
 // RW Registers
 // constexpr uint8_t kRegAuxVddio = 0x01;  // Revision 3.2
