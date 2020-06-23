@@ -29,3 +29,7 @@ target_link_libraries(msg_server SERIAL NANOPB pthread)
 add_executable(pwm_ctrl pwm_ctrl.cc ${MSG_SOURCE})
 target_include_directories(pwm_ctrl PRIVATE . ${MSG_INCLUDE_DIRS})
 target_link_libraries(pwm_ctrl SERIAL NANOPB pthread)
+
+add_executable(twist_ctrl twist_ctrl.cc ${MSG_SOURCE})
+target_include_directories(twist_ctrl PRIVATE . ${MSG_INCLUDE_DIRS})
+target_link_libraries(twist_ctrl SERIAL NANOPB pthread)

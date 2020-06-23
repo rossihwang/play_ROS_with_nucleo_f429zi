@@ -88,15 +88,16 @@ void thread2() {
   while (1) {
     Twist message = Twist_init_zero;
     message.has_angular = true;
-    message.angular.x = 1;
-    message.angular.y = 2;
-    message.angular.z = 3;
+    message.angular.x = 0;
+    message.angular.y = 0;
+    message.angular.z = 0;
     message.has_linear = true;
-    message.linear.x = 4;
-    message.linear.y = 5;
-    message.linear.z = 6;
+    message.linear.x = 0;
+    message.linear.y = 0;
+    message.linear.z = 0;
     pg.publish<Twist>(MessageId::TWIST, message);
-    std::cout << "publish: Twist" << std::endl;
+    printf("publish: Twist - angluar: (%f, %f, %f), linear: (%f, %f, %f)\n", message.angular.x, message.angular.y, message.angular.z,
+                                                                           message.linear.x, message.linear.y, message.linear.z);
     sleep(3);
   }
 }
