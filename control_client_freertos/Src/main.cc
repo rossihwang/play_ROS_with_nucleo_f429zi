@@ -26,9 +26,11 @@
 #include <hal/encoder.hpp>
 #include <msg/msg_def.h>
 #include <pigeon/pigeon.h>
-#include <sensor/mpu6050.hpp>
+#include <module/mpu6050.hpp>
+#include <module/motor.hpp>
 
 #include <mx_export.h>
+#include <sstream>
 
 using pigeon::Pigeon;
 /* Private includes ----------------------------------------------------------*/
@@ -62,10 +64,9 @@ extern TIM_HandleTypeDef htim8;
 
 Pigeon pg;
 hal::UartDmaInterface uart(&huart3);
-sensor::Mpu6050 imu(&hi2c1, 0x68);  // 0x68: AD0->GND, 0x69: AD0->VCC
+module::Mpu6050 imu(&hi2c1, 0x68);  // 0x68: AD0->GND, 0x69: AD0->VCC
 hal::PwmInterface pwm(&htim8);
-hal::Encoder encoder1(&htim3);
-hal::Encoder encoder2(&htim4);
+module::DiffDrive driver(&htim8, &htim3, &htim4);
 
 /* Definitions for defaultTask */
 osThreadId_t defaultTaskHandle;
@@ -87,12 +88,12 @@ osThreadId_t uartRxTaskHandle;
 const osThreadAttr_t uartRxTask_attributes = {
   .name = "uartRxTask",
   .stack_size = 512 * 4,
-  .priority = (osPriority_t) osPriorityNormal
+  .priority = (osPriority_t) osPriorityHigh
 };
 
-osThreadId_t encoderTaskHandle;
-const osThreadAttr_t encoderTask_attributes = {
-  .name = "encoderTask",
+osThreadId_t controlTaskHandle;
+const osThreadAttr_t controlTask_attributes = {
+  .name = "controlTask",
   .stack_size = 256 * 4,
   .priority = (osPriority_t) osPriorityNormal
 };
@@ -106,7 +107,7 @@ void SystemClock_Config(void);
 void StartDefaultTask(void *argument);
 void ImuReadTaskHandle(void *argument);
 void UartRxTaskHandle(void *argument);
-void EncoderTaskHandle(void *argument);
+void ControlTaskHandle(void *argument);
 
 void callback_twist(const uint8_t *data, uint16_t length);
 void callback_pwm_ctrl(const uint8_t *data, uint16_t length);
@@ -164,8 +165,6 @@ int main(void)
   pwm.SetChannelDuty(3, 0.0);
   pwm.SetChannelDuty(4, 0.0);
 
-
-
   pg.create_subscriber(MessageId::TWIST, callback_twist);
   pg.create_subscriber(MessageId::PWM_CTRL, callback_pwm_ctrl);
   using std::placeholders::_1;
@@ -202,7 +201,7 @@ int main(void)
 
   uartRxTaskHandle = osThreadNew(UartRxTaskHandle, NULL, &uartRxTask_attributes);
 
-  encoderTaskHandle = osThreadNew(EncoderTaskHandle, NULL, &encoderTask_attributes);
+  controlTaskHandle = osThreadNew(ControlTaskHandle, NULL, &controlTask_attributes);
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
   /* USER CODE END RTOS_THREADS */
@@ -228,14 +227,21 @@ void callback_twist(const uint8_t *data, uint16_t length) {
   pb_istream_t stream = pb_istream_from_buffer(data, length);
   status = pb_decode(&stream, Twist_fields, &message);
   if (status) {
-    if (message.has_angular) {
+    module::linear lv;
+    module::angular av;
 
+    if (message.has_angular) {
+      av.x = message.angular.x;
+      av.y = message.angular.y;
+      av.z = message.angular.z;
     }
     if (message.has_linear) {
-
+      lv.x = message.linear.x;
+      lv.y = message.linear.y;
+      lv.z = message.linear.z;
     }
     taskENTER_CRITICAL();
-    pg.publish<Twist>(MessageId::TWIST, message);
+    driver.Set(lv, av);
     taskEXIT_CRITICAL();
   }
   return;
@@ -365,28 +371,19 @@ void UartRxTaskHandle(void *argument) {
   }
 }
 
-void EncoderTaskHandle(void *argument) {
-  Encoder message = Encoder_init_zero;
-  
-  hal::Encoder::Direction rdirect, ldirect;
-  uint16_t rcount, lcount;
-  
-  encoder1.Start();
-  encoder2.Start();
+void ControlTaskHandle(void *argument) {
+  driver.Init();
+  uint16_t target, set, current;
+  static char sb[50];
 
   for (;;) {
-    message = Encoder_init_zero;
-    std::tie(rdirect, rcount) = encoder1.ReadDiff();
-    std::tie(ldirect, lcount) = encoder2.ReadDiff();
-    message.rdir = (rdirect == hal::Encoder::Direction::kAntiClockwise ? Encoder_Direction_ANTI_CLOCKWISE : Encoder_Direction_CLOCKWISE);
-    message.rcounter = rcount;
-    message.ldir = (ldirect == hal::Encoder::Direction::kAntiClockwise ? Encoder_Direction_ANTI_CLOCKWISE : Encoder_Direction_CLOCKWISE);
-    message.lcounter = lcount;
-
+    std::tie(target, set, current) = driver.Update();
+    snprintf(sb, 50, "target: %d, set: %d, current: %d", target, set, current);
     taskENTER_CRITICAL();
-    pg.publish<Encoder>(MessageId::ENCODER, message);
+    pg.log<Log_Level_DEBUG>(std::string(sb));
     taskEXIT_CRITICAL();
-    osDelay(100);  // 10ms
+
+    osDelay(100);  // 100ms
   }
 }
 
