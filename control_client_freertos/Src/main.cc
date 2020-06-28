@@ -373,12 +373,12 @@ void UartRxTaskHandle(void *argument) {
 
 void ControlTaskHandle(void *argument) {
   driver.Init();
-  uint16_t target, set, current;
+  int32_t target, set, current;
   static char sb[50];
 
   for (;;) {
     std::tie(target, set, current) = driver.Update();
-    snprintf(sb, 50, "target: %d, set: %d, current: %d", target, set, current);
+    snprintf(sb, 50, "target: %ld, set: %ld, current: %ld", target, set, current);
     taskENTER_CRITICAL();
     pg.log<Log_Level_DEBUG>(std::string(sb));
     taskEXIT_CRITICAL();

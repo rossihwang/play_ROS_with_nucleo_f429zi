@@ -28,7 +28,7 @@ class PIDController {
       ki_(ki),
       kd_(kd),
       tau_(tau),
-      lim_min_(0),
+      lim_min_(-lim_max),
       lim_max_(lim_max),
       T_(T),
       integrator_(0),

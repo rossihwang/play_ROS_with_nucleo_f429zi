@@ -45,9 +45,8 @@ class DiffDrive {
   hal::Encoder encoder2_;  // left
   module::PIDController left_controller_;
   module::PIDController right_controller_;
-  uint16_t left_target_;
-  uint16_t right_target_;
-  bool is_forward_;
+  int32_t left_target_;
+  int32_t right_target_;
   
  public:
   DiffDrive(TIM_HandleTypeDef *htim_pwm, TIM_HandleTypeDef *htim_encoder1, TIM_HandleTypeDef *htim_encoder2)
@@ -57,8 +56,7 @@ class DiffDrive {
       left_controller_(2, 5, 0, 0.01, kControlPeriod, kCountFullPwmMps),
       right_controller_(2, 5, 0, 0.01, kControlPeriod, kCountFullPwmMps),
       left_target_(0),
-      right_target_(0),
-      is_forward_(true) {
+      right_target_(0) {
     
   }
   void Init() {
@@ -78,42 +76,73 @@ class DiffDrive {
     pwm_.SetChannelDuty(3, 0);
     pwm_.SetChannelDuty(4, 0);
   }
-  std::tuple<uint16_t, uint16_t, uint16_t> Update() {
+  std::tuple<int32_t, int32_t, int32_t> Update() {
     hal::Encoder::Direction rdirect, ldirect;
-    uint16_t rcount, lcount;
+    int32_t rcount, lcount;
     float left_out, right_out;
+
+
+    // if (left_target_ == 0 && right_target_ == 0) {
+    //   Stop();
+    // }
 
     std::tie(ldirect, lcount) = encoder2_.ReadDiff();
     std::tie(rdirect, rcount) = encoder1_.ReadDiff();
 
-    left_out = left_controller_.Update(left_target_, lcount);
-    right_out = right_controller_.Update(right_target_, rcount);
+    if (ldirect == hal::Encoder::Direction::kClockwise) {
+      lcount = -lcount;
+    }
+    if (rdirect == hal::Encoder::Direction::kAntiClockwise) {
+      rcount = -rcount;
+    }
 
-    if (is_forward_) {
-      pwm_.SetChannelDuty(1, right_out / kCountFullPwmMps);
-      pwm_.SetChannelDuty(2, 0);
-      pwm_.SetChannelDuty(3, 0);
-      pwm_.SetChannelDuty(4, left_out / kCountFullPwmMps);
+    if (left_target_ != 0) {
+      left_out = left_controller_.Update(left_target_, lcount);
     } else {
-      pwm_.SetChannelDuty(1, 0);
-      pwm_.SetChannelDuty(2, right_out / kCountFullPwmMps);
-      pwm_.SetChannelDuty(3, left_out / kCountFullPwmMps);
-      pwm_.SetChannelDuty(4, 0);
+      left_out = 0;
     }
     
-    return std::make_tuple(right_target_, static_cast<uint16_t>(right_out), rcount);
+    if (right_target_ != 0) {
+      right_out = right_controller_.Update(right_target_, rcount);
+    } else {
+      right_out = 0;
+    }
+    
+
+    // pwm channel 1&2 used for right wheel, while channel 3&4 used for left wheel
+    // if (is_forward_) {
+    //   pwm_.SetChannelDuty(1, right_out / kCountFullPwmMps);
+    //   pwm_.SetChannelDuty(2, 0);
+    //   pwm_.SetChannelDuty(3, 0);
+    //   pwm_.SetChannelDuty(4, left_out / kCountFullPwmMps);
+    // } else {
+    //   pwm_.SetChannelDuty(1, 0);
+    //   pwm_.SetChannelDuty(2, right_out / kCountFullPwmMps);
+    //   pwm_.SetChannelDuty(3, left_out / kCountFullPwmMps);
+    //   pwm_.SetChannelDuty(4, 0);
+    // }
+
+    if (right_out < 0) {
+      pwm_.SetChannelDuty(1, 0);
+      pwm_.SetChannelDuty(2, -right_out / kCountFullPwmMps);
+    } else {
+      pwm_.SetChannelDuty(1, right_out / kCountFullPwmMps);
+      pwm_.SetChannelDuty(2, 0);
+    }
+
+    if (left_out < 0) {
+      pwm_.SetChannelDuty(3, -left_out / kCountFullPwmMps);
+      pwm_.SetChannelDuty(4, 0);
+    } else {
+      pwm_.SetChannelDuty(3, 0);
+      pwm_.SetChannelDuty(4, left_out / kCountFullPwmMps);
+    }
+    
+    return std::make_tuple(right_target_, static_cast<int32_t>(right_out), rcount);
   }
   void Set(const linear &v, const angular &w) {
-    float vx;
-    if (v.x < 0) {
-      is_forward_ = false;
-      vx = -v.x;
-    } else {
-      is_forward_ = true;
-      vx = v.x;
-    }
-    left_target_ = (vx * kCountsMps) * kControlPeriod;
-    right_target_ = (vx * kCountsMps) * kControlPeriod;
+    left_target_ = (v.x * kCountsMps) * kControlPeriod;
+    right_target_ = (v.x * kCountsMps) * kControlPeriod;
   }
 };
 
