@@ -14,6 +14,7 @@ constexpr float kMaxVelocity = 0.2;
 constexpr float kCountsMps = 7644;  // 
 constexpr float kCountFullPwmMps = 1300;  // 13000
 constexpr float kControlPeriod = 0.1;  // s
+constexpr float kWheelDistance = 0.15; // m
 
 struct linear {
   float x;
@@ -81,11 +82,6 @@ class DiffDrive {
     int32_t rcount, lcount;
     float left_out, right_out;
 
-
-    // if (left_target_ == 0 && right_target_ == 0) {
-    //   Stop();
-    // }
-
     std::tie(ldirect, lcount) = encoder2_.ReadDiff();
     std::tie(rdirect, rcount) = encoder1_.ReadDiff();
 
@@ -108,20 +104,6 @@ class DiffDrive {
       right_out = 0;
     }
     
-
-    // pwm channel 1&2 used for right wheel, while channel 3&4 used for left wheel
-    // if (is_forward_) {
-    //   pwm_.SetChannelDuty(1, right_out / kCountFullPwmMps);
-    //   pwm_.SetChannelDuty(2, 0);
-    //   pwm_.SetChannelDuty(3, 0);
-    //   pwm_.SetChannelDuty(4, left_out / kCountFullPwmMps);
-    // } else {
-    //   pwm_.SetChannelDuty(1, 0);
-    //   pwm_.SetChannelDuty(2, right_out / kCountFullPwmMps);
-    //   pwm_.SetChannelDuty(3, left_out / kCountFullPwmMps);
-    //   pwm_.SetChannelDuty(4, 0);
-    // }
-
     if (right_out < 0) {
       pwm_.SetChannelDuty(1, 0);
       pwm_.SetChannelDuty(2, -right_out / kCountFullPwmMps);
@@ -141,8 +123,11 @@ class DiffDrive {
     return std::make_tuple(right_target_, static_cast<int32_t>(right_out), rcount);
   }
   void Set(const linear &v, const angular &w) {
-    left_target_ = (v.x * kCountsMps) * kControlPeriod;
-    right_target_ = (v.x * kCountsMps) * kControlPeriod;
+    // left_target_ = (v.x * kCountsMps) * kControlPeriod;
+    // right_target_ = (v.x * kCountsMps) * kControlPeriod;
+    // differential drive model
+    left_target_ = (v.x - (w.z * kWheelDistance) * 0.5) * kCountsMps * kControlPeriod;
+    right_target_ = (v.x + (w.z * kWheelDistance) * 0.5) * kCountsMps * kControlPeriod; 
   }
 };
 
