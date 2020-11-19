@@ -62,11 +62,12 @@ extern TIM_HandleTypeDef htim3;
 extern TIM_HandleTypeDef htim4;
 extern TIM_HandleTypeDef htim8;
 
-Pigeon pg;
-hal::UartDmaInterface uart(&huart3);
-module::Mpu6050 imu(&hi2c1, 0x68);  // 0x68: AD0->GND, 0x69: AD0->VCC
-hal::PwmInterface pwm(&htim8);
-module::DiffDrive driver(&htim8, &htim3, &htim4);
+static Pigeon pg;
+static hal::UartDmaInterface uart(&huart3);
+static module::Mpu6050 imu(&hi2c1, 0x68);  // 0x68: AD0->GND, 0x69: AD0->VCC
+static module::MotorController motor_controller(&htim8, &htim3, &htim4);
+
+static int32_t right_target, left_target;
 
 /* Definitions for defaultTask */
 osThreadId_t defaultTaskHandle;
@@ -74,7 +75,6 @@ const osThreadAttr_t defaultTask_attributes = {
   .name = "defaultTask",
   .stack_size = 256 * 4,
   .priority = (osPriority_t) osPriorityNormal
-  
 };
 /* Definitions for debugLedTask */
 osThreadId_t imuReadTaskHandle;
@@ -109,9 +109,7 @@ void ImuReadTaskHandle(void *argument);
 void UartRxTaskHandle(void *argument);
 void ControlTaskHandle(void *argument);
 
-void callback_twist(const uint8_t *data, uint16_t length);
-void callback_pwm_ctrl(const uint8_t *data, uint16_t length);
-
+void callback_motor_control(const uint8_t *data, uint16_t length);
 
 /* USER CODE BEGIN PFP */
 
@@ -158,15 +156,9 @@ int main(void)
   MX_TIM3_Init();
   MX_TIM4_Init();
   /* USER CODE BEGIN 2 */
-  uart.init();
-  pwm.Init(500);
-  pwm.SetChannelDuty(1, 0.0);
-  pwm.SetChannelDuty(2, 0.0);
-  pwm.SetChannelDuty(3, 0.0);
-  pwm.SetChannelDuty(4, 0.0);
 
-  pg.create_subscriber(MessageId::TWIST, callback_twist);
-  pg.create_subscriber(MessageId::PWM_CTRL, callback_pwm_ctrl);
+  uart.init();
+  pg.create_subscriber(MessageId::CNTR2, callback_motor_control);
   using std::placeholders::_1;
   using std::placeholders::_2;
   pg.register_read(std::bind(static_cast<size_t (hal::UartDmaInterface::*)(uint8_t*, size_t)>(&hal::UartDmaInterface::read), &uart, _1, _2));
@@ -221,42 +213,18 @@ int main(void)
   /* USER CODE END 3 */
 }
 
-void callback_twist(const uint8_t *data, uint16_t length) {
-  Twist message = Twist_init_zero;
+void callback_motor_control(const uint8_t *data, uint16_t length) {
+  Counter2 message = Counter2_init_zero;
   bool status;
-  pb_istream_t stream = pb_istream_from_buffer(data, length);
-  status = pb_decode(&stream, Twist_fields, &message);
+  pb_istream_t  stream = pb_istream_from_buffer(data, length);
+  status = pb_decode(&stream, Counter2_fields, &message);
   if (status) {
-    module::linear lv;
-    module::angular av;
-
-    if (message.has_angular) {
-      av.x = message.angular.x;
-      av.y = message.angular.y;
-      av.z = message.angular.z;
-    }
-    if (message.has_linear) {
-      lv.x = message.linear.x;
-      lv.y = message.linear.y;
-      lv.z = message.linear.z;
-    }
     taskENTER_CRITICAL();
-    driver.Set(lv, av);
+    motor_controller.set(message.right, message.left);
     taskEXIT_CRITICAL();
+    right_target = message.right;
+    left_target = message.left;
   }
-  return;
-}
-
-void callback_pwm_ctrl(const uint8_t *data, uint16_t length) {
-  PwmCtrl message = PwmCtrl_init_zero;
-  bool status;
-  pb_istream_t stream = pb_istream_from_buffer(data, length);
-  status = pb_decode(&stream, PwmCtrl_fields, &message);
-  if (status) {
-    pwm.SetChannelDuty(message.channel, message.duty);
-  }
-  
-  return;
 }
 
 void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart) {
@@ -372,17 +340,28 @@ void UartRxTaskHandle(void *argument) {
 }
 
 void ControlTaskHandle(void *argument) {
-  driver.Init();
-  int32_t target, set, current;
-  static char sb[50];
+  motor_controller.init();
+  int32_t right_out, right_counter, left_out, left_counter;
+  // static char sb[50];
 
   for (;;) {
-    std::tie(target, set, current) = driver.Update();
-    snprintf(sb, 50, "target: %ld, set: %ld, current: %ld", target, set, current);
-    taskENTER_CRITICAL();
-    pg.log<Log_Level_DEBUG>(std::string(sb));
-    taskEXIT_CRITICAL();
+    std::tie(right_out, right_counter, left_out, left_counter) = motor_controller.update();
+    // snprintf(sb, 50, "right: target: %ld, set: %ld, current: %ld", right_target, right_out, right_counter);
+    // taskENTER_CRITICAL();
+    // pg.log<Log_Level_DEBUG>(std::string(sb));
+    // taskEXIT_CRITICAL();
+    // snprintf(sb, 50, "left: target: %ld, set: %ld, current: %ld", left_target, left_out, left_counter);
+    // taskENTER_CRITICAL();
+    // pg.log<Log_Level_DEBUG>(std::string(sb));
+    // taskEXIT_CRITICAL();
 
+
+    Counter2 message;
+    message.right = right_counter;
+    message.left = left_counter;
+    taskENTER_CRITICAL();
+    pg.publish<Counter2>(MessageId::CNTR2, message);
+    taskEXIT_CRITICAL();
     osDelay(100);  // 100ms
   }
 }

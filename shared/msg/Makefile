@@ -1,6 +1,6 @@
 all: normal max_size_feature 
 	
-normal: imu.proto twist.proto encoder.proto Vector3.proto pwm_ctrl.proto
+normal: imu.proto twist.proto Vector3.proto pwm_ctrl.proto counter2.proto
 	protoc --plugin=generator/protoc-gen-nanopb --nanopb_out=. $^
 
 max_size_feature: logging.proto

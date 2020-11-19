@@ -27,9 +27,9 @@ constexpr T max(T a, T b) {
   return a < b ? b : a;
 }
 
-const std::array<uint16_t, 4> message_size = {{Encoder_size, Imu_size, Twist_size, Log_size}};
+const std::array<uint16_t, 4> message_size = {{Counter2_size, Imu_size, Twist_size, Log_size}};
 
-constexpr uint16_t kMaxBufferSize = max(max(Encoder_size, Imu_size), max(Twist_size, Log_size));  // FIXME: How to implement a compile-time for loop?
+constexpr uint16_t kMaxBufferSize = max(max(Counter2_size, Imu_size), max(Twist_size, Log_size));  // FIXME: How to implement a compile-time for loop?
 
 class Pigeon {
 private:

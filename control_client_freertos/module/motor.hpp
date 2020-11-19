@@ -10,124 +10,93 @@
 
 namespace module {
 
-constexpr float kMaxVelocity = 0.2;
-constexpr float kCountsMps = 7644;  // 
-constexpr float kCountFullPwmMps = 1300;  // 13000
+constexpr float kCountFullPwmMps = 1300;
 constexpr float kControlPeriod = 0.1;  // s
-constexpr float kWheelDistance = 0.15; // m
 
-struct linear {
-  float x;
-  float y;
-  float z;
-  linear (float x = 0, float y = 0, float z = 0)
-    : x(x),
-      y(y),
-      z(z) {
-  }
-};
-
-struct angular {
-  float x;
-  float y;
-  float z;
-  angular (float x = 0, float y = 0, float z = 0)
-    : x(x),
-      y(y),
-      z(z) {
-  }
-};
-
-class DiffDrive {
+class MotorController {
 
  private:
   hal::PwmInterface pwm_;
-  hal::Encoder encoder1_;  // right
-  hal::Encoder encoder2_;  // left
-  module::PIDController left_controller_;
+  hal::Encoder right_encoder_;
+  hal::Encoder left_encoder_;
   module::PIDController right_controller_;
-  int32_t left_target_;
+  module::PIDController left_controller_;
   int32_t right_target_;
-  
+  int32_t left_target_;
+
  public:
-  DiffDrive(TIM_HandleTypeDef *htim_pwm, TIM_HandleTypeDef *htim_encoder1, TIM_HandleTypeDef *htim_encoder2)
+  MotorController(TIM_HandleTypeDef *htim_pwm, TIM_HandleTypeDef *htim_encoder1, TIM_HandleTypeDef *htim_encoder2)
     : pwm_(htim_pwm),
-      encoder1_(htim_encoder1),
-      encoder2_(htim_encoder2),
-      left_controller_(2, 5, 0, 0.01, kControlPeriod, kCountFullPwmMps),
+      right_encoder_(htim_encoder1),
+      left_encoder_(htim_encoder2),
       right_controller_(2, 5, 0, 0.01, kControlPeriod, kCountFullPwmMps),
-      left_target_(0),
-      right_target_(0) {
+      left_controller_(2, 5, 0, 0.01, kControlPeriod, kCountFullPwmMps),
+      right_target_(0),
+      left_target_(0) {
     
   }
-  void Init() {
-    encoder1_.Start();
-    encoder2_.Start();
+  void init() {
+    right_encoder_.Start();
+    left_encoder_.Start();
     pwm_.Init(500);
     pwm_.SetChannelDuty(1, 0);
     pwm_.SetChannelDuty(2, 0);
     pwm_.SetChannelDuty(3, 0);
     pwm_.SetChannelDuty(4, 0);
   }
-  void Stop() {
-    encoder1_.Stop();
-    encoder2_.Stop();
+  void stop() {
+    right_encoder_.Stop();
+    left_encoder_.Stop();
     pwm_.SetChannelDuty(1, 0);
     pwm_.SetChannelDuty(2, 0);
     pwm_.SetChannelDuty(3, 0);
     pwm_.SetChannelDuty(4, 0);
   }
-  std::tuple<int32_t, int32_t, int32_t> Update() {
-    hal::Encoder::Direction rdirect, ldirect;
-    int32_t rcount, lcount;
-    float left_out, right_out;
+  std::tuple<int32_t, int32_t, int32_t, int32_t> update() {
+    hal::Encoder::Direction right_dir, left_dir;
+    int32_t right_counter, left_counter;
+    float right_pwm_out, left_pwm_out;
 
-    std::tie(ldirect, lcount) = encoder2_.ReadDiff();
-    std::tie(rdirect, rcount) = encoder1_.ReadDiff();
+    std::tie(right_dir, right_counter) = right_encoder_.ReadDiff();
+    std::tie(left_dir, left_counter) = left_encoder_.ReadDiff();
 
-    if (ldirect == hal::Encoder::Direction::kClockwise) {
-      lcount = -lcount;
+    if (right_dir == hal::Encoder::Direction::kAntiClockwise) {
+      right_counter = -right_counter;
     }
-    if (rdirect == hal::Encoder::Direction::kAntiClockwise) {
-      rcount = -rcount;
+    if (left_dir == hal::Encoder::Direction::kClockwise) {
+      left_counter = -left_counter;
     }
 
-    if (left_target_ != 0) {
-      left_out = left_controller_.Update(left_target_, lcount);
-    } else {
-      left_out = 0;
-    }
-    
     if (right_target_ != 0) {
-      right_out = right_controller_.Update(right_target_, rcount);
+      right_pwm_out = right_controller_.Update(right_target_, right_counter);
     } else {
-      right_out = 0;
+      right_pwm_out = 0;
     }
-    
-    if (right_out < 0) {
-      pwm_.SetChannelDuty(1, 0);
-      pwm_.SetChannelDuty(2, -right_out / kCountFullPwmMps);
+    if (left_target_ != 0) {
+      left_pwm_out = left_controller_.Update(left_target_, left_counter);
     } else {
-      pwm_.SetChannelDuty(1, right_out / kCountFullPwmMps);
+      left_pwm_out = 0;
+    }
+
+    if (right_pwm_out < 0) {
+      pwm_.SetChannelDuty(1, 0);
+      pwm_.SetChannelDuty(2, -right_pwm_out / kCountFullPwmMps);  // backward
+    } else {
+      pwm_.SetChannelDuty(1, right_pwm_out / kCountFullPwmMps);  // forward
       pwm_.SetChannelDuty(2, 0);
     }
-
-    if (left_out < 0) {
-      pwm_.SetChannelDuty(3, -left_out / kCountFullPwmMps);
+    if (left_pwm_out < 0) {
+      pwm_.SetChannelDuty(3, -left_pwm_out / kCountFullPwmMps);  // backward
       pwm_.SetChannelDuty(4, 0);
     } else {
       pwm_.SetChannelDuty(3, 0);
-      pwm_.SetChannelDuty(4, left_out / kCountFullPwmMps);
+      pwm_.SetChannelDuty(4, left_pwm_out / kCountFullPwmMps);  // forward
     }
-    
-    return std::make_tuple(right_target_, static_cast<int32_t>(right_out), rcount);
+    return std::make_tuple(right_pwm_out, right_counter, left_pwm_out, left_counter);
   }
-  void Set(const linear &v, const angular &w) {
-    // left_target_ = (v.x * kCountsMps) * kControlPeriod;
-    // right_target_ = (v.x * kCountsMps) * kControlPeriod;
-    // differential drive model
-    left_target_ = (v.x - (w.z * kWheelDistance) * 0.5) * kCountsMps * kControlPeriod;
-    right_target_ = (v.x + (w.z * kWheelDistance) * 0.5) * kCountsMps * kControlPeriod; 
+  void set(int32_t right_target, int32_t left_target) {
+    right_target_ = right_target;
+    left_target_ = left_target;
   }
 };
 

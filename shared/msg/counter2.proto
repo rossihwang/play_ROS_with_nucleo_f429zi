@@ -1,0 +1,6 @@
+syntax = "proto3";
+
+message Counter2 {
+    int32 left = 1;
+    int32 right = 2;
+}
