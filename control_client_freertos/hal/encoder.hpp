@@ -10,7 +10,7 @@ namespace hal {
 class Encoder {
  private:
   TIM_HandleTypeDef *htim_;
-  uint16_t last_count_;
+  int32_t last_count_;
 
  public:
   enum class Direction {
@@ -47,11 +47,11 @@ class Encoder {
     last_count_ = count;
     return std::make_tuple(dir, count);
   }
-  std::tuple<Direction, uint16_t> ReadDiff() {
+  std::tuple<Direction, int32_t> ReadDiff() {
     Direction dir;
-    uint16_t count, diff;
+    int32_t count, diff;
 
-    count = __HAL_TIM_GET_COUNTER(htim_);
+    count = static_cast<int32_t>(__HAL_TIM_GET_COUNTER(htim_));
     if (__HAL_TIM_IS_TIM_COUNTING_DOWN(htim_)) {
       dir = Direction::kAntiClockwise;
       diff = last_count_ - count;
