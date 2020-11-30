@@ -56,16 +56,21 @@ using pigeon::Pigeon;
 extern UART_HandleTypeDef huart3;
 extern DMA_HandleTypeDef hdma_usart3_tx;
 extern DMA_HandleTypeDef hdma_usart3_rx;
-extern I2C_HandleTypeDef hi2c1;
+extern I2C_HandleTypeDef hi2c1;  // imu
 
-extern TIM_HandleTypeDef htim3;
-extern TIM_HandleTypeDef htim4;
-extern TIM_HandleTypeDef htim8;
+extern TIM_HandleTypeDef htim1;  // motor 1
+extern TIM_HandleTypeDef htim2;  // motor 2
+extern TIM_HandleTypeDef htim3;  // motor 3
+extern TIM_HandleTypeDef htim4;  // motor 4
+extern TIM_HandleTypeDef htim8;  // motor 5
+
+extern ADC_HandleTypeDef hadc1;
 
 static Pigeon pg;
 static hal::UartDmaInterface uart(&huart3);
 static module::Mpu6050 imu(&hi2c1, 0x68);  // 0x68: AD0->GND, 0x69: AD0->VCC
-static module::MotorController motor_controller(&htim8, &htim3, &htim4);
+static module::DcMotor right_motor(&htim8, &htim1, 1, 2);
+static module::DcMotor left_motor(&htim8, &htim2, 3, 4, true);
 
 static int32_t right_target, left_target;
 
@@ -108,7 +113,6 @@ void StartDefaultTask(void *argument);
 void ImuReadTaskHandle(void *argument);
 void UartRxTaskHandle(void *argument);
 void ControlTaskHandle(void *argument);
-
 void callback_motor_control(const uint8_t *data, uint16_t length);
 
 /* USER CODE BEGIN PFP */
@@ -152,9 +156,12 @@ int main(void)
   MX_USART3_UART_Init();
   MX_I2C1_Init();
 
+  MX_TIM1_Init();
+  MX_TIM2_Init();
+  // MX_TIM3_Init();
+  // MX_TIM4_Init();
   MX_TIM8_Init();
-  MX_TIM3_Init();
-  MX_TIM4_Init();
+  
   /* USER CODE BEGIN 2 */
 
   uart.init();
@@ -220,7 +227,8 @@ void callback_motor_control(const uint8_t *data, uint16_t length) {
   status = pb_decode(&stream, Counter2_fields, &message);
   if (status) {
     taskENTER_CRITICAL();
-    motor_controller.set(message.right, message.left);
+    right_motor.set(message.right);
+    left_motor.set(message.left);
     taskEXIT_CRITICAL();
     right_target = message.right;
     left_target = message.left;
@@ -340,21 +348,20 @@ void UartRxTaskHandle(void *argument) {
 }
 
 void ControlTaskHandle(void *argument) {
-  motor_controller.init();
+  // motor_controller.init();
+  right_motor.init();
+  left_motor.init();
   int32_t right_out, right_counter, left_out, left_counter;
   // static char sb[50];
 
   for (;;) {
-    std::tie(right_out, right_counter, left_out, left_counter) = motor_controller.update();
-    // snprintf(sb, 50, "right: target: %ld, set: %ld, current: %ld", right_target, right_out, right_counter);
-    // taskENTER_CRITICAL();
-    // pg.log<Log_Level_DEBUG>(std::string(sb));
-    // taskEXIT_CRITICAL();
+    std::tie(right_out, right_counter) = right_motor.update();
+    std::tie(left_out, left_counter) = left_motor.update();
+
     // snprintf(sb, 50, "left: target: %ld, set: %ld, current: %ld", left_target, left_out, left_counter);
     // taskENTER_CRITICAL();
     // pg.log<Log_Level_DEBUG>(std::string(sb));
     // taskEXIT_CRITICAL();
-
 
     Counter2 message;
     message.right = right_counter;

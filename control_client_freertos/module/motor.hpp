@@ -13,91 +13,85 @@ namespace module {
 constexpr float kCountFullPwmMps = 1300;
 constexpr float kControlPeriod = 0.1;  // s
 
-class MotorController {
+class DcMotor {
 
  private:
   hal::PwmInterface pwm_;
-  hal::Encoder right_encoder_;
-  hal::Encoder left_encoder_;
-  module::PIDController right_controller_;
-  module::PIDController left_controller_;
-  int32_t right_target_;
-  int32_t left_target_;
+  hal::Encoder encoder_;
+  module::PIDController controller_;
+  int32_t target_;
+  int pwm_ch1_;
+  int pwm_ch2_;
+  hal::Encoder::Direction ref_direction_;
+  int32_t last_counter_;
+  bool inverted_;
 
  public:
-  MotorController(TIM_HandleTypeDef *htim_pwm, TIM_HandleTypeDef *htim_encoder1, TIM_HandleTypeDef *htim_encoder2)
-    : pwm_(htim_pwm),
-      right_encoder_(htim_encoder1),
-      left_encoder_(htim_encoder2),
-      right_controller_(2, 5, 0, 0.01, kControlPeriod, kCountFullPwmMps),
-      left_controller_(2, 5, 0, 0.01, kControlPeriod, kCountFullPwmMps),
-      right_target_(0),
-      left_target_(0) {
-    
+  DcMotor(TIM_HandleTypeDef *pwm_timer, TIM_HandleTypeDef *encoder_timer,  int pwm_ch1, int pwm_ch2, bool inverted = false) 
+    : pwm_(pwm_timer),
+      encoder_(encoder_timer),
+      controller_(2, 5, 0, 0.01, kControlPeriod, kCountFullPwmMps),
+      target_(0),
+      pwm_ch1_(pwm_ch1),
+      pwm_ch2_(pwm_ch2),
+      last_counter_(0),
+      inverted_(inverted) {
   }
   void init() {
-    right_encoder_.Start();
-    left_encoder_.Start();
+    encoder_.Start();
     pwm_.Init(500);
-    pwm_.SetChannelDuty(1, 0);
-    pwm_.SetChannelDuty(2, 0);
-    pwm_.SetChannelDuty(3, 0);
-    pwm_.SetChannelDuty(4, 0);
+    pwm_.SetChannelDuty(pwm_ch1_, 0);
+    pwm_.SetChannelDuty(pwm_ch2_, 0);
   }
-  void stop() {
-    right_encoder_.Stop();
-    left_encoder_.Stop();
-    pwm_.SetChannelDuty(1, 0);
-    pwm_.SetChannelDuty(2, 0);
-    pwm_.SetChannelDuty(3, 0);
-    pwm_.SetChannelDuty(4, 0);
+
+  void stop () {
+    encoder_.Stop();
+    pwm_.SetChannelDuty(pwm_ch1_, 0);
+    pwm_.SetChannelDuty(pwm_ch2_, 0);
   }
-  std::tuple<int32_t, int32_t, int32_t, int32_t> update() {
-    hal::Encoder::Direction right_dir, left_dir;
-    int32_t right_counter, left_counter;
-    float right_pwm_out, left_pwm_out;
+  std::tuple<int32_t, int32_t> update() {
+    hal::Encoder::Direction dir;
+    int32_t counter;
+    float pwm_out;
 
-    std::tie(right_dir, right_counter) = right_encoder_.ReadDiff();
-    std::tie(left_dir, left_counter) = left_encoder_.ReadDiff();
-
-    if (right_dir == hal::Encoder::Direction::kAntiClockwise) {
-      right_counter = -right_counter;
-    }
-    if (left_dir == hal::Encoder::Direction::kClockwise) {
-      left_counter = -left_counter;
+    std::tie(dir, counter) = encoder_.ReadDiff();
+    // counter is unsigned after readout
+    if (dir == hal::Encoder::Direction::kAntiClockwise) {
+      counter = -counter;
     }
 
-    if (right_target_ != 0) {
-      right_pwm_out = right_controller_.Update(right_target_, right_counter);
-    } else {
-      right_pwm_out = 0;
+    // FIXME: kind of overflow problem in the ReadDiff???
+    // currently just ignore the invalid counter value and return the last value
+    if (1.5 * kCountFullPwmMps < std::abs(counter)) {
+      counter = last_counter_;
     }
-    if (left_target_ != 0) {
-      left_pwm_out = left_controller_.Update(left_target_, left_counter);
+    if (target_ != 0) {
+      pwm_out = controller_.Update(target_, counter);
     } else {
-      left_pwm_out = 0;
+      pwm_out = 0;
     }
 
-    if (right_pwm_out < 0) {
-      pwm_.SetChannelDuty(1, 0);
-      pwm_.SetChannelDuty(2, -right_pwm_out / kCountFullPwmMps);  // backward
+    if (pwm_out < 0) {
+      pwm_.SetChannelDuty(pwm_ch1_, 0);
+      pwm_.SetChannelDuty(pwm_ch2_, -pwm_out / kCountFullPwmMps);  // backward
+    } else if (0 < pwm_out) {
+      pwm_.SetChannelDuty(pwm_ch1_, pwm_out / kCountFullPwmMps);  // forward
+      pwm_.SetChannelDuty(pwm_ch2_, 0);
     } else {
-      pwm_.SetChannelDuty(1, right_pwm_out / kCountFullPwmMps);  // forward
-      pwm_.SetChannelDuty(2, 0);
+      pwm_.SetChannelDuty(pwm_ch1_, 0);
+      pwm_.SetChannelDuty(pwm_ch2_, 0);
     }
-    if (left_pwm_out < 0) {
-      pwm_.SetChannelDuty(3, -left_pwm_out / kCountFullPwmMps);  // backward
-      pwm_.SetChannelDuty(4, 0);
-    } else {
-      pwm_.SetChannelDuty(3, 0);
-      pwm_.SetChannelDuty(4, left_pwm_out / kCountFullPwmMps);  // forward
-    }
-    return std::make_tuple(right_pwm_out, right_counter, left_pwm_out, left_counter);
+    
+    last_counter_ = counter;
+    return std::make_tuple(pwm_out, counter); 
   }
-  void set(int32_t right_target, int32_t left_target) {
-    right_target_ = right_target;
-    left_target_ = left_target;
+
+  void set(int32_t target) {
+    if (inverted_) {
+      target_ = -target;
+    } else {
+      target_ = target;
+    }
   }
 };
-
 }  // namespace module

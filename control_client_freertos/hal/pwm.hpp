@@ -30,8 +30,6 @@ class PwmInterface {
     htim_->Init.Period = period - 1;
     period_ = period;
 
-    HAL_TIM_PWM_Init(htim_);
-
     if (HAL_TIM_PWM_Init(htim_) != HAL_OK) {
       Error_Handler();
     }
